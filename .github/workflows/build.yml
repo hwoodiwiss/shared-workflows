@@ -63,7 +63,7 @@ jobs:
           dotnet workload restore
           $projectPath = $(Get-ChildItem -Filter ${{ inputs.project }}.csproj -Recurse).FullName
           Write-Output "::debug::Project Path: $projectPath"
-          dotnet publish $projectPath -c Release -r ${{ matrix.architecture }} --self-contained /p:GenerateAotMetadata=true
+          dotnet publish "$projectPath" -c Release -r ${{ matrix.architecture }} --self-contained /p:GenerateAotMetadata=true
 
       - name: Publish AOT Build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
