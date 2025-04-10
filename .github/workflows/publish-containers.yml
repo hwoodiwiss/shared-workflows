@@ -1,0 +1,124 @@
+name: publish-image
+description: Builds and publishes 4 .NET container images using the .NET SDK container publishing support; One for each permutation of AOT and architecture.
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: "The .NET project to publish container images for"
+        type: string
+        required: true
+      tag-version:
+        description: "The tag version to use for the image"
+        type: string
+        required: false
+      generate-binlog:
+        description: "Should we generate binlogs for the build"
+        type: boolean
+        required: false
+      ghcr-username:
+        description: "The username that will be used to login to ghcr"
+        type: string
+        required: true
+      publish-command:
+        description: ""
+        type: string
+        required: false
+        default: "/publish"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  get-tag-version:
+    if: github.event_name != 'issue_comment' || (github.event.issue.pull_request != '' && startsWith(github.event.comment.body, inputs.publish-command) && github.triggering_actor == github.repository_owner)
+    runs-on: ubuntu-latest
+    outputs:
+      tag-version: ${{ steps.get_version_details.outputs.tag-version }}
+      ref: ${{ steps.get_version_details.outputs.ref-name }}
+    steps:
+      - name: Get Tag Details
+        if: github.event_name != 'issue_comment'
+        run: |
+          echo "TAG_VERSION=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag-version || github.ref_name }}" >> "$GITHUB_ENV"
+          echo "REF_NAME=${{ github.ref_name || '' }}" >> "$GITHUB_ENV"
+
+      - name: Get PR Details
+        if: github.event_name == 'issue_comment'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const { owner, repo, number } = context.issue
+            const pr_details_response = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: number
+            })
+            core.exportVariable('TAG_VERSION', `pr-${pr_details_response.data.number}`)
+            core.exportVariable('REF_NAME', pr_details_response.data.head.ref)
+
+      - name: Get Version
+        id: get_version_details
+        run: |
+          echo "tag-version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "ref-name=$REF_NAME" >> "$GITHUB_OUTPUT"
+
+  build-image:
+    needs: [get-tag-version]
+    strategy:
+      matrix:
+        architecture: [arm64, amd64]
+        mode: [aot, jit]
+      fail-fast: false
+
+    runs-on: ${{ matrix.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+          ref: ${{ needs.get-tag-version.outputs.ref }}
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+
+      - name: Install .NET Workloads
+        run: dotnet workload restore
+
+      - name: Login to GHCR
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ inputs.ghcr-username }} --password-stdin
+
+      - name: Publish Image
+        shell: pwsh
+        run: |
+          $projectPath = $(Get-ChildItem -Filter ${{ inputs.project }}.csproj -Recurse).FullName
+          dotnet publish $projectPath ${{ inputs.generate-binlog && '-bl' || '' }} --self-contained --os linux --arch ${{ matrix.architecture }} \
+          /t:PublishContainer ${{ matrix.mode == 'jit' && '/p:PublishAot=false /p:PublishTrimmed=true' || '' }} \
+          -p ContainerImageTags='"${{ needs.get-tag-version.outputs.tag-version }}-${{ matrix.architecture }}${{ matrix.mode == 'jit' && '-jit' || '' }}${{ matrix.architecture == 'arm64' && ';latest' || '' }}${{ (matrix.architecture == 'arm64' && matrix.mode == 'jit') && '-jit' || '' }}"'
+
+      - name: Publish Binlog
+        if: inputs.generate-binlog == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binlog-${{ matrix.architecture }}-${{ matrix.mode }}
+          path: ./msbuild.binlog
+
+  create-tag:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: [get-tag-version, build-image]
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Create Tag
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'refs/tags/${{ needs.get-tag-version.outputs.tag-version }}',
+                sha: context.sha
+              })
