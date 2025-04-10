@@ -61,7 +61,7 @@ jobs:
 
       - name: Publish AOT
         shell: pwsh
-        run: ${{ inputs.publish-aot-script }} -RuntimeIdentifier ${{ matrix.architecture }}
+        run: ${{ inputs.publish-aot-script }} -RuntimeIdentifier linux-${{ matrix.architecture }}
 
       - name: Publish AOT Build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
