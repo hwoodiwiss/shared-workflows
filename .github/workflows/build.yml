@@ -72,6 +72,7 @@ jobs:
 
           dotnet workload restore
           $projectPath = $(Get-ChildItem -Filter ${{ inputs.project }}.csproj -Recurse).FullName
+          Write-Output "::debug::Project Path: $projectPath"
           DotNetPublish $projectPath
 
       - name: Publish AOT Build
