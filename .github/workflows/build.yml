@@ -60,7 +60,6 @@ jobs:
       - name: Publish AOT
         shell: pwsh
         run: |
-          dotnet workload restore
           $projectPath = Resolve-Path -Relative -Path $(Get-ChildItem -Filter ${{ inputs.project }}.csproj -Recurse).FullName -RelativeBasePath .
           Write-Output "::debug::Project Path: $projectPath"
           dotnet publish "$projectPath" -c Release -r ${{ matrix.architecture }} --self-contained /p:GenerateAotMetadata=true
