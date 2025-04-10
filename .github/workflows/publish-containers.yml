@@ -1,5 +1,4 @@
-name: publish-image
-description: Builds and publishes 4 .NET container images using the .NET SDK container publishing support; One for each permutation of AOT and architecture.
+name: publish-images
 
 on:
   workflow_call:

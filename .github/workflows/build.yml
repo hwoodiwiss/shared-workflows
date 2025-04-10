@@ -60,19 +60,17 @@ jobs:
       - name: Publish AOT
         shell: pwsh
         run: |
-          $dotnet = Join-Path "$env:DOTNET_INSTALL_DIR" "dotnet"
-
           function DotNetPublish {
               param([string]$Project)
 
-              & $dotnet publish $Project -c Release -r ${{ matrix.architecture }} --self-contained /p:GenerateAotMetadata=true
+              dotnet publish $Project -c Release -r ${{ matrix.architecture }} --self-contained /p:GenerateAotMetadata=true
 
               if ($LASTEXITCODE -ne 0) {
                   throw "dotnet publish failed with exit code $LASTEXITCODE"
               }
           }
 
-          & $dotnet workload restore
+          dotnet workload restore
           $projectPath = $(Get-ChildItem -Filter ${{ inputs.project }}.csproj -Recurse).FullName
           DotNetPublish $projectPath
 
