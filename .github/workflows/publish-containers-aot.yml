@@ -1,4 +1,4 @@
-name: publish-images
+name: publish-containers-aot
 
 on:
   workflow_call:

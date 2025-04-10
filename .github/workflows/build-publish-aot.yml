@@ -1,4 +1,4 @@
-name: build
+name: build-publish-aot
 
 on:
   workflow_call:
@@ -12,6 +12,11 @@ on:
         type: string
         required: false
         default: '.\build\build.ps1'
+      publish-aot-script:
+        description: "The path to the publish-aot script to run"
+        type: string
+        required: false
+        default: '.\build\publish-aot.ps1'
 
 env:
   DOTNET_GENERATE_ASPNET_CERTIFICATE: false
@@ -54,15 +59,9 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
 
-      - name: Install .NET Workloads
-        run: dotnet workload restore
-
       - name: Publish AOT
         shell: pwsh
-        run: |
-          $projectPath = Resolve-Path -Relative -Path $(Get-ChildItem -Filter ${{ inputs.project }}.csproj -Recurse).FullName -RelativeBasePath .
-          Write-Output "::debug::Project Path: $projectPath"
-          dotnet publish "$projectPath" -c Release -r ${{ matrix.architecture }} --self-contained /p:GenerateAotMetadata=true
+        run: ${{ inputs.publish-aot-script }}
 
       - name: Publish AOT Build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
